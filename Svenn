@@ -1,0 +1,129 @@
+#include <iostream>
+#include <cmath>
+#include <locale.h>
+
+using namespace std;
+
+// f(x) = e^x + 1/x
+double f(double x) {
+    return exp(x) + 1.0 / x;
+}
+
+int main() {
+    setlocale(LC_ALL, "Russian");
+    
+    double x0 = 0.4;    
+    double t = 0.1;     
+
+    cout << "АЛГОРИТМ СВЕННА\n" << endl;
+    cout << "Функция: f(x) = e^x + 1/x" << endl;
+    cout << "Начальная точка x0 = " << x0 << endl;
+    cout << "Шаг t = " << t << endl << endl;
+
+    // ШАГ 2: Вычисляем значения в трех точках
+    double x_left = x0 - t;     
+    double x_center = x0;        
+    double x_right = x0 + t;     
+
+    double f_left = f(x_left);
+    double f_center = f(x_center);
+    double f_right = f(x_right);
+
+    cout << "ШАГ 2: Вычисление функции в трех точках:" << endl;
+    cout << "f(" << x_left << ") = " << f_left << endl;
+    cout << "f(" << x_center << ") = " << f_center << endl;
+    cout << "f(" << x_right << ") = " << f_right << endl << endl;
+
+    // ШАГ 3: Проверка условий
+    // Условие 3a: f(x0-t) >= f(x0) <= f(x0+t)
+    if (f_left >= f_center && f_center <= f_right) {
+        cout << "ШАГ 3: Интервал найден сразу" << endl;
+        cout << "Интервал неопределенности: [" << x_left << ", " << x_right << "]" << endl;
+        return 0;
+    }
+
+    // Условие 3б: f(x0-t) <= f(x0) >= f(x0+t) 
+    if (f_left <= f_center && f_center >= f_right) {
+        cout << "ШАГ 3: Функция не является унимодальной" << endl;
+        return 0;
+    }
+
+    // ШАГ 4: определить длину d
+    double delta;
+    double a0, b0;  
+
+    // f(x0-t) >= f(x0) >= f(x0+t)
+    if (f_left >= f_center && f_center >= f_right) {
+        delta = t;           
+        a0 = x0;             
+        cout << "ШАГ 4a:" << endl;
+        cout << "a0 = " << a0 << endl;
+    }
+    // f(x0-t) <= f(x0) <= f(x0+t)
+    else {  
+        delta = -t;          
+        b0 = x0;             
+        cout << "ШАГ 4б: " << endl;
+        cout << "b0 = " << b0 << endl;
+    }
+
+    cout << endl;
+
+    // ШАГ 5: Итерационный процесс
+    double xk = x0 + delta;    
+    int k = 1;
+
+    cout << "ШАГ 5: Итерации" << endl;
+    cout << "x^1 = x0 + delta = " << x0 << " + " << delta << " = " << xk << endl;
+    cout << "f(x^1) = " << f(xk) << endl << endl;
+
+    // Основной цикл поиска
+    while (true) {
+        // x^(k+1) = x^k + 2^k * delta
+        double step = pow(2, k);           
+        double xk_next = xk + step * delta;
+
+        cout << "Итерация " << k << ":" << endl;
+        cout << "x^" << k + 1 << " = x^" << k << " + 2^" << k << " * delta" << " = " << xk << " + " << step << " * " << delta << " = " << xk_next << endl;
+
+        double f_current = f(xk);
+        double f_next = f(xk_next);
+
+        cout << "f(x^" << k << ") = " << f_current << endl;
+        cout << "f(x^" << k + 1 << ") = " << f_next << endl;
+
+        // ШАГ 6: Проверка условия 
+        if (f_next < f_current) {            
+            if (delta > 0) {  
+                a0 = xk;
+                cout << "ШАГ 6a: обновляем левую границу a0 = " << a0 << endl;
+            }
+            else {           
+                b0 = xk;
+                cout << "ШАГ 6a: обновляем правую границу b0 = " << b0 << endl;
+            }
+
+            // Готовим следующую итерацию
+            xk = xk_next;
+            k++;
+            cout << endl;
+        }
+        else {  
+            // Нашли интервал
+            if (delta > 0) {
+                b0 = xk_next;
+                cout << "ШАГ 6б: устанавливаем правую границу b0 = " << b0 << endl << endl;
+            }
+            else {
+                a0 = xk_next;
+                cout << "ШАГ 6б: устанавливаем левую границу a0 = " << a0 << endl;
+            }
+                       
+            cout << "Начальный интервал неопределённости:" << endl;
+            cout << "[" << a0 << ", " << b0 << "]" << endl;
+                       
+            break;  
+        }
+    }
+    return 0;
+}
