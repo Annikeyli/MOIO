@@ -1,0 +1,204 @@
+#include <iostream>
+#include <cmath>
+#include <functional>
+#include <algorithm>
+#include <vector>
+#include <iomanip>
+
+using namespace std;
+
+// Функция f(x) = e^x + 1/x
+double targetFunction(double x) {
+    if (x == 0) {
+        // Возвращаем большое число для точки разрыва (x=0 не входит в ОДЗ)
+        return 1e300;
+    }
+    return exp(x) + 1.0 / x;
+}
+
+// Квадратичная интерполяция с защитой от деления на ноль
+double quadraticInterpolation(double x1, double x2, double x3, double f1, double f2, double f3) {
+    double denominator = (x2 - x3) * f1 + (x3 - x1) * f2 + (x1 - x2) * f3;
+
+    if (abs(denominator) < 1e-15) {
+        return x2;  // Возвращаем среднюю точку при вырождении
+    }
+
+    double numerator = (x2 * x2 - x3 * x3) * f1 + (x3 * x3 - x1 * x1) * f2 + (x1 * x1 - x2 * x2) * f3;
+    return 0.5 * numerator / denominator;
+}
+
+// Функция поиска минимума
+double findMinimum(const function<double(double)>& f,
+    double x1,
+    double initialDeltaX,
+    double eps1,
+    double eps2,
+    int& iterations,
+    int maxIterations = 30) {
+
+    double deltaX = initialDeltaX;
+    double x2, x3;
+    double f1, f2, f3;
+    double x_min, f_min;
+    double x_bar, f_bar;
+    double prev_x_bar = x1;
+
+    iterations = 0;
+    bool converged = false;
+
+    cout << fixed << setprecision(8);
+    cout << "Начальная точка: x1 = " << x1 << ", начальный шаг = " << deltaX << endl;
+    cout << "Точность: eps1 = " << eps1 << ", eps2 = " << eps2 << endl;
+    cout << string(80, '-') << endl;
+    cout << setw(5) << "№"
+        << setw(15) << "x_bar"
+        << setw(15) << "f(x_bar)"
+        << setw(15) << "|dx/x|"
+        << setw(15) << "|df/f|"
+        << setw(15) << "deltaX" << endl;
+    cout << string(80, '-') << endl;
+
+    while (iterations < maxIterations && !converged) {
+        iterations++;
+
+        // Шаг 2: Вычисляем x2
+        x2 = x1 + deltaX;
+
+        // Шаг 3: Вычисляем значения функции
+        f1 = f(x1);
+        f2 = f(x2);
+
+        // Шаг 4: Сравниваем f1 и f2 для определения направления
+        if (f1 > f2) {
+            // Случай а: f1 > f2 - идем вправо
+            x3 = x1 + 2 * deltaX;
+            if (x3 <= 0) x3 = x1 + deltaX * 1.5; // Корректировка для ОДЗ
+        }
+        else {
+            // Случай б: f1 <= f2 - идем влево
+            x3 = x1 - deltaX;
+            if (x3 <= 0) x3 = x1 - deltaX * 0.5; // Корректировка для ОДЗ
+        }
+
+        // Шаг 5: Вычисляем f3
+        f3 = f(x3);
+
+        // Шаг 6: Находим минимальное значение среди трёх точек
+        vector<pair<double, double>> points = { {x1, f1}, {x2, f2}, {x3, f3} };
+        auto minPoint = *min_element(points.begin(), points.end(),
+            [](const auto& a, const auto& b) { return a.second < b.second; });
+        x_min = minPoint.first;
+        f_min = minPoint.second;
+
+        // Шаг 7: Вычисляем точку минимума интерполяционного полинома
+        x_bar = quadraticInterpolation(x1, x2, x3, f1, f2, f3);
+
+        // Проверка на ОДЗ
+        if (x_bar <= 0) {
+            x_bar = x_min; // Если интерполяция дала отрицательную точку, используем лучшую из имеющихся
+        }
+
+        f_bar = f(x_bar);
+
+        // Вычисляем условия окончания
+        double rel_x_diff = abs((x_min - x_bar) / (x_bar + 1e-15));
+        double rel_f_diff = abs((f_min - f_bar) / (f_bar + 1e-15));
+
+        // Выводим информацию о текущей итерации
+        cout << setw(5) << iterations
+            << setw(15) << x_bar
+            << setw(15) << f_bar
+            << setw(15) << rel_x_diff
+            << setw(15) << rel_f_diff
+            << setw(15) << deltaX << endl;
+
+        // Шаг 8: Проверка условий окончания
+        if (rel_x_diff < eps2 && rel_f_diff < eps1) {
+            converged = true;
+            break;
+        }
+
+        // Выбор стратегии для следующей итерации
+        double interval_min = min({ x1, x2, x3 });
+        double interval_max = max({ x1, x2, x3 });
+
+        if (x_bar >= interval_min && x_bar <= interval_max && x_bar > 0) {
+            // x_bar внутри интервала и положительный - выбираем три лучшие точки
+
+            // Собираем все точки
+            vector<pair<double, double>> allPoints = { {x1, f1}, {x2, f2}, {x3, f3}, {x_bar, f_bar} };
+
+            // Сортируем по значению функции (лучшие - с меньшим f)
+            sort(allPoints.begin(), allPoints.end(),
+                [](const auto& a, const auto& b) { return a.second < b.second; });
+
+            // Берем три точки с наименьшими значениями функции
+            vector<pair<double, double>> bestPoints;
+            for (int i = 0; i < min(3, (int)allPoints.size()); i++) {
+                bestPoints.push_back(allPoints[i]);
+            }
+
+            // Сортируем их по x для удобства
+            sort(bestPoints.begin(), bestPoints.end());
+
+            x1 = bestPoints[0].first;
+            if (bestPoints.size() > 1) x2 = bestPoints[1].first;
+            if (bestPoints.size() > 2) x3 = bestPoints[2].first;
+
+            // Уменьшаем шаг для ускорения сходимости
+            deltaX *= 0.7;
+        }
+        else {
+            // x_bar вне интервала или отрицательный - начинаем с новой точки
+            x1 = (x_bar > 0) ? x_bar : x_min;
+            // Уменьшаем шаг для осторожного приближения
+            deltaX = abs(x1) * 0.2;
+        }
+
+        // Проверка на зацикливание
+        if (abs(x_bar - prev_x_bar) < 1e-12) {
+            deltaX *= 0.5;
+        }
+        prev_x_bar = x_bar;
+
+        // Проверка на слишком маленький шаг
+        if (deltaX < 1e-12) {
+            cout << "  Шаг стал слишком маленьким, завершаем поиск" << endl;
+            break;
+        }
+    }
+
+    cout << string(80, '-') << endl;
+
+    if (converged) {
+        cout << "Сходимость достигнута за " << iterations << " итераций" << endl;
+    }
+    else {
+        cout << "Достигнуто максимальное число итераций (" << maxIterations << ")" << endl;
+    }
+
+    return x_bar;
+}
+
+int main() {
+    setlocale(LC_ALL, "Russian");
+
+    cout << "ПОИСК МИНИМУМА МЕТОДОМ КВАДРАТИЧНОЙ ИНТЕРПОЛЯЦИИ\n" << endl;
+
+    // Параметры поиска
+    double x1 = 0.7;        // Начальная точка (положительная, чтобы быть в ОДЗ)
+    double deltaX = 0.02;    // Начальный шаг
+    double eps1 = 0.001;     // Точность по функции
+    double eps2 = 0.01;     // Точность по аргументу
+
+    int iterations;
+    double result = findMinimum(targetFunction, x1, deltaX, eps1, eps2, iterations, 25);
+
+    
+    cout << "РЕЗУЛЬТАТ ПОИСКА:" << endl;
+    cout << "Найденный минимум: x* = " << result << endl;
+    cout << "Значение функции: f(x*) = " << targetFunction(result) << endl;
+        
+    return 0;
+}
